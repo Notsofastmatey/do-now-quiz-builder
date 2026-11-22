@@ -167,12 +167,8 @@
     shapes.push(text(5.85, TOP, R - 5.85, coverH, [runs("Answers hidden. Drag this box away.")],
       { size: 24, bold: true, color: C.WHITE, anchor: "ctr", align: "c", name: "Answer cover (drag to reveal)", cover: true,
         box: { shape: "rect", fill: C.DARK, radius: 0.035 * Math.min(R - 5.85, coverH) } }));
-    const notes = qs.map((q, i) => {
-      const bits = [`${i + 1}. ${plain(q.ans)}`];
-      if (q.misc) bits.push(`   Watch for: ${q.misc}`);
-      return bits.join("\n");
-    }).join("\n");
-    return { shapes, notes, fits, sizes: { ans: asize, short: ssize } };
+    // no speaker notes here: pupils can see notes, so answers never go in them
+    return { shapes, notes: "", fits, sizes: { ans: asize, short: ssize } };
   }
   const sum = a => a.reduce((s, x) => s + x, 0);
 
