@@ -713,10 +713,10 @@
    "id": "errors-04",
    "topic": "errors",
    "q": "There are several **syntax errors** in this code. Write a corrected version.",
-   "ans": "**print(\"Robot is \" + str(23) + \" years old\")** – matching quotes, str() for the number, one closing bracket.",
-   "short": "Fix Robot is 23",
+   "ans": "**print(\"John is \" + str(23) + \" years old\")** – matching quotes, str() for the number, one closing bracket.",
+   "short": "Fix John is 23",
    "code": [
-    "print('Robot is \" + 23 + \"years old\"))"
+    "print('John is \" + 23 + \"years old\"))"
    ],
    "marks": 2,
    "src": "old",
@@ -1263,8 +1263,8 @@
   {
    "id": "strings-01",
    "topic": "strings",
-   "q": "word = \"Parrot\". What is **word[0]**? What is **word[-1]**?",
-   "ans": "**P** and **t**",
+   "q": "word = \"Henry\". What is **word[0]**? What is **word[-1]**?",
+   "ans": "**H** and **y**",
    "short": "word[0] and word[-1]",
    "marks": 1,
    "src": "old",
@@ -2714,8 +2714,8 @@
   {
    "id": "units-05",
    "topic": "units",
-   "q": "Which is the **smallest**: 1.5 GB, 400 MB, 350 000 KB, 0.0002 TB?",
-   "ans": "**0.0002 TB** = 200 MB (350 000 KB = 350 MB)",
+   "q": "Which is the **smallest**: 2 GB, 400 MB, 350 000 KB, 3 000 000 bytes?",
+   "ans": "**3 000 000 bytes** = 3 MB (350 000 KB = 350 MB; 2 GB = 2000 MB)",
    "short": "Smallest capacity",
    "marks": 1,
    "src": "new",
@@ -2751,9 +2751,9 @@
   {
    "id": "images-05",
    "topic": "images",
-   "q": "**5 images**, each **400 × 200 pixels**, colour depth **8 bits**. Calculate the total size in kilobytes. Show your working.",
-   "ans": "400 × 200 = 80 000 pixels × 8 = 640 000 bits ÷ 8 = 80 000 bytes = 80 KB each; × 5 = **400 KB**",
-   "short": "5 images, 400 × 200, 8-bit",
+   "q": "**4 images**, each **100 × 50 pixels**, colour depth **8 bits**. Calculate the total size in kilobytes. Show your working.",
+   "ans": "100 × 50 = 5 000 pixels × 8 = 40 000 bits ÷ 8 = 5 000 bytes = 5 KB each; × 4 = **20 KB**",
+   "short": "4 images, 100 × 50, 8-bit",
    "marks": 2,
    "src": "new",
    "level": "apply",

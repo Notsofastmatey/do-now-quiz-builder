@@ -105,7 +105,7 @@
     return { q: `Perform a **${places} place ${d}** binary shift on **${b8(n)}**. Give the result in binary and denary. What has happened?`,
       ans: `**${b8(res)} = ${res}** (was ${n}): ${eff}`, short: `${b8(n)} ${d} ${places}`, marks: 2 }; };
 
-  G["binary-range"] = r => { const n = r.choice([4, 5, 6, 7, 8, 16]);
+  G["binary-range"] = r => { const n = r.choice([4, 5, 6, 7, 8]);
     return { q: `What is the **largest** number that **${n} bits** can store? How many **different** values?`,
       ans: `Largest **${2 ** n - 1}**; **${2 ** n}** values (2^${n})`, short: `${n} bits: largest? how many?` }; };
 
@@ -115,24 +115,30 @@
     const c2 = String.fromCharCode(c1.charCodeAt(0) + r.randint(2, 12));
     return { q: `In ASCII, **${c1} = ${c1.charCodeAt(0)}**. What is the code for **${c2}**?`, ans: `**${c2.charCodeAt(0)}**: letters are stored in order`, short: `ASCII ${c2}?` }; };
 
-  G["text-file-size"] = r => { const n = r.choice([500, 1000, 2000, 5000, 10000]);
+  // " = 2 KB" only when it's a whole number of KB (no decimal answers)
+  const kb = by => by >= 1000 && by % 1000 === 0 ? ` = **${idiv(by, 1000)} KB**` : "";
+
+  G["text-file-size"] = r => { const n = r.choice([100, 200, 500, 1000, 2000, 5000]);
     const [cs, bits] = r.choice([["ASCII (8 bits per character)", 8], ["extended ASCII", 8], ["Unicode (16 bits per character)", 16]]);
-    const kb = n * bits / 8 / 1000;
-    return { q: `A text file has **${c(n)} characters** stored in **${cs}**. What is its minimum size in KB?`,
-      ans: `${c(n)} × ${bits} = ${c(n * bits)} bits ÷ 8 = ${c(idiv(n * bits, 8))} bytes = **${g(kb)} KB**`, short: `${c(n)} chars, ${bits}-bit` }; };
+    const by = idiv(n * bits, 8);
+    return { q: `A text file has **${c(n)} characters** stored in **${cs}**. What is its minimum size in **bytes**?`,
+      ans: `${c(n)} × ${bits} = ${c(n * bits)} bits ÷ 8 = **${c(by)} bytes**${kb(by)}`, short: `${c(n)} chars, ${bits}-bit` }; };
 
   G["image-size"] = r => {
-    const w = r.choice([20, 40, 50, 60, 80, 100, 200]), h = r.choice([10, 20, 40, 50, 100, 200, 300]);
-    let depth, how, work;
-    if (r.random() < 0.6) {
-      const colours = r.choice([2, 4, 8, 16, 256]);
-      depth = Math.log2(colours);
-      how = `**${colours} colours**`;
-      work = `${colours} colours needs ${depth} bit${depth > 1 ? "s" : ""}. `;
-    } else { depth = r.choice([1, 2, 4, 8, 24]); how = `a colour depth of **${depth} bits**`; work = ""; }
-    const bits = w * h * depth;
-    return { q: `An image is **${w} × ${h} pixels** with ${how}. What is its file size in **bytes** and **KB**?`,
-      ans: `${work}${w} × ${h} × ${depth} = ${c(bits)} bits ÷ 8 = **${cg(bits / 8)} bytes** = **${g(bits / 8 / 1000)} KB**`,
+    let w, h, depth, how, work, bits;
+    for (;;) {  // re-roll until the bits make whole bytes
+      w = r.choice([4, 5, 8, 10, 20, 50, 100]); h = r.choice([4, 5, 8, 10, 20, 50, 100]);
+      if (r.random() < 0.6) {
+        const colours = r.choice([2, 4, 8, 16, 256]);
+        depth = Math.log2(colours);
+        how = `**${colours} colours**`;
+        work = `${colours} colours needs ${depth} bit${depth > 1 ? "s" : ""}. `;
+      } else { depth = r.choice([1, 2, 4, 8]); how = `a colour depth of **${depth} bit${depth > 1 ? "s" : ""}**`; work = ""; }
+      bits = w * h * depth;
+      if (bits % 8 === 0) break;
+    }
+    return { q: `An image is **${w} × ${h} pixels** with ${how}. What is its file size in **bytes**?`,
+      ans: `${work}${w} × ${h} × ${depth} = ${c(bits)} bits ÷ 8 = **${c(idiv(bits, 8))} bytes**${kb(idiv(bits, 8))}`,
       short: `${w} × ${h}, ${depth}-bit image`, marks: 2 }; };
 
   G["colours-from-depth"] = r => { const d = r.choice([1, 2, 3, 4, 5, 6, 8]);
@@ -140,14 +146,14 @@
     return { q: `An image uses **${2 ** d} colours**. What is the minimum colour depth?`, ans: `**${d} bits** (2^${d} = ${2 ** d})`, short: `${2 ** d} colours: bits?` }; };
 
   G["sound-size"] = r => {
-    const secs = r.choice([2, 3, 4, 5, 10, 20]), khz = r.choice([1, 2, 4, 8, 44.1]), depth = r.choice([4, 8, 16]);
-    const bits = Math.trunc(secs * khz * 1000 * depth);
-    return { q: `A sound is **${secs} seconds** long, sample rate **${g(khz)} kHz**, bit depth **${depth} bits**. What is its size in **KB**?`,
-      ans: `${secs} × ${c(Math.trunc(khz * 1000))} × ${depth} = ${c(bits)} bits ÷ 8 = ${c(idiv(bits, 8))} bytes = **${g(bits / 8 / 1000)} KB**`,
-      short: `${secs} s, ${g(khz)} kHz, ${depth}-bit`, marks: 2 }; };
+    const secs = r.choice([1, 2, 5, 10]), hz = r.choice([100, 200, 500, 1000]), depth = r.choice([4, 8, 16]);
+    const bits = hz * secs * depth;
+    return { q: `A sound is **${secs} second${secs > 1 ? "s" : ""}** long, sample rate **${c(hz)} Hz**, bit depth **${depth} bits**. What is its size in **bytes**?`,
+      ans: `${c(hz)} × ${secs} × ${depth} = ${c(bits)} bits ÷ 8 = **${c(idiv(bits, 8))} bytes**${kb(idiv(bits, 8))}`,
+      short: `${secs} s, ${c(hz)} Hz, ${depth}-bit`, marks: 2 }; };
 
   // ---------------- operators ----------------
-  G["mod-div"] = r => { const a = r.randint(20, 250), b = r.choice([3, 4, 6, 7, 8, 10, 60]);
+  G["mod-div"] = r => { const b = r.choice([3, 4, 5, 6, 7, 8, 10, 60]), a = b === 60 ? r.randint(70, 200) : r.randint(10, 60);
     const ctx = b === 60 ? " How might this be useful in real life?" : "";
     const extra = b === 60 ? ` (${a} minutes = ${idiv(a, b)} hours ${a % b} minutes)` : "";
     return { q: `What is **${a} DIV ${b}** (${a} // ${b} in Python) and **${a} MOD ${b}** (${a} % ${b})?${ctx}`, ans: `**${idiv(a, b)}** and **${a % b}**${extra}`, short: `${a} DIV / MOD ${b}` }; };
