@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Do Now paste test</title>
+<style>
+  body { font-family: Aptos, "Segoe UI", sans-serif; background: #e9ece9; color: #222; margin: 0; padding: 20px; }
+  h1 { margin: 0 0 4px; font-size: 24px; }
+  .intro { max-width: 70em; margin: 0 0 16px; }
+  .wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr)); gap: 20px; }
+  .card { background: #fff; border-radius: 8px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .card h2 { margin: 0 0 8px; font-size: 18px; }
+  .slide svg { width: 100%; height: auto; display: block; border: 1px solid #ccc; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  button { font: inherit; font-weight: 600; padding: 9px 14px; border: 0; border-radius: 5px; color: #fff; background: #008741; cursor: pointer; }
+  button.alt { background: #00642D; }
+  button.exp { background: #6b6b6b; }
+  .msg { min-height: 1.4em; margin-top: 8px; font-size: 14px; }
+  .ok { color: #00642D; } .no { color: #B00020; }
+  ol, ul { margin: 6px 0; padding-left: 22px; } li { margin: 3px 0; }
+  #env { font-size: 13px; color: #555; }
+</style>
+</head>
+<body>
+<h1>Do Now paste test</h1>
+<p class="intro">Each button puts the quiz on the clipboard in a different format. After each one, switch to PowerPoint, click an empty slide, press <b>Ctrl+V</b> and note what appears.
+  The questions are invented samples.</p>
+<p id="env"></p>
+
+<div class="wrap">
+  <div class="card">
+    <h2>Quiz slide</h2>
+    <div class="slide" id="quizPreview"></div>
+    <div class="btns">
+      <button data-copy="quiz-png">A. Copy as picture</button>
+      <button data-copy="quiz-table" class="alt">B. Copy as table</button>
+      <button data-copy="quiz-svg" class="exp">C. Copy as SVG (experimental)</button>
+    </div>
+    <div class="msg" id="msg-quiz"></div>
+  </div>
+  <div class="card">
+    <h2>Answers slide (no cover: that stays in your deck)</h2>
+    <div class="slide" id="ansPreview"></div>
+    <div class="btns">
+      <button data-copy="ans-png">D. Copy answers as picture</button>
+      <button data-copy="ans-table" class="alt">E. Copy answers as table</button>
+    </div>
+    <div class="msg" id="msg-ans"></div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:20px">
+  <h2>What to check</h2>
+  <ul>
+    <li><b>A / D (picture):</b> does it paste as one sharp picture filling the slide? (Drag a corner to fit if not.)</li>
+    <li><b>B / E (table):</b> does it paste as a real PowerPoint table? Are the green colours, bold, line breaks and the Consolas code kept? Can you edit the text?</li>
+    <li><b>C (SVG):</b> does anything paste? If a picture appears, right-click it: is there <b>Convert to Shape</b>, and does that give editable text?</li>
+    <li><b>Cover test:</b> on a slide, draw a dark green rectangle where the answers go. Paste D, then right-click the picture → <b>Send to Back</b>. Is the cover still on top and draggable in the slideshow?</li>
+    <li>Note whether you used PowerPoint desktop or PowerPoint in the browser, and which browser.</li>
+  </ul>
+</div>
+
+<script>
+// ---- Invented sample questions (answers checked by running the code) ----
+const QUESTIONS = [
+  { q: "Convert **200** to hexadecimal.", short: "200 in hex?", ans: "**C8**: 1100 = C, 1000 = 8" },
+  { q: "What is the output of this program?", code: ['name = "Robot"', 'print(name[0] + str(len(name)))'],
+    short: "Output of the name code?", ans: "**R5**: first character + length 5" },
+  { q: "**State** what the program counter holds.", short: "Program counter holds?", ans: "The **address** of the next instruction" },
+  { q: "How many bits are in **3 bytes**?", short: "Bits in 3 bytes?", ans: "**24** (3 × 8)" },
+  { q: "**Explain** why RAM is described as volatile.", short: "Why is RAM volatile?",
+    ans: "It **loses its contents** when the power is switched off", plus1: true },
+];
+
+// ---- Layout (inches, from the Broadland spec), drawn at 96 px per inch ----
+const PPI = 96, W = 13.333 * PPI, H = 7.5 * PPI;
+const px = inch => +(inch * PPI).toFixed(2);
+const pt = p => p * 96 / 72;
+const FONT = "Aptos, 'Segoe UI', Calibri, sans-serif";
+const MONO = "Consolas, 'Courier New', monospace";
+const GREEN = "#008741", LIME = "#8CC841", DARK = "#00642D", CARD = "#D9F3D0";
+
+const measureCtx = document.createElement("canvas").getContext("2d");
+const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+// "**bold** text" -> [{t, b}] word tokens
+function tokens(s) {
+  const out = [];
+  s.split(/(\*\*[^*]+\*\*)/).forEach(part => {
+    const b = part.startsWith("**");
+    const text = b ? part.slice(2, -2) : part;
+    text.split(/(\s+)/).forEach(w => { if (w) out.push({ t: w, b }); });
+  });
+  return out;
+}
+function wrap(s, sizePx, maxW) {
+  const lines = [[]]; let width = 0;
+  for (const tk of tokens(s)) {
+    measureCtx.font = (tk.b ? "bold " : "") + sizePx + "px " + FONT;
+    const w = measureCtx.measureText(tk.t).width;
+    if (/^\s+$/.test(tk.t)) { if (lines.at(-1).length) { lines.at(-1).push(tk); width += w; } continue; }
+    if (width + w > maxW && lines.at(-1).length) { lines.push([]); width = 0; }
+    lines.at(-1).push(tk); width += w;
+  }
+  return lines;
+}
+function textBlock(s, x, yMid, sizePt, maxW, fill = "#222") {
+  const size = pt(sizePt), lh = size * 1.2;
+  const lines = wrap(s, size, maxW);
+  let y = yMid - (lines.length * lh) / 2 + size * 0.85;
+  return lines.map(line => {
+    const spans = line.map(tk => `<tspan font-weight="${tk.b ? "bold" : "normal"}">${esc(tk.t)}</tspan>`).join("");
+    const el = `<text x="${x}" y="${y.toFixed(1)}" font-family="${FONT}" font-size="${size.toFixed(1)}" fill="${fill}" xml:space="preserve">${spans}</text>`;
+    y += lh; return el;
+  }).join("");
+}
+function frame(title) {
+  return `<rect width="${W}" height="${H}" fill="#F3F3F3"/>
+  <rect x="${px(0.547)}" y="${px(0.25)}" width="${px(0.544)}" height="${px(0.067)}" fill="${GREEN}"/>
+  <rect x="${px(1.088)}" y="${px(0.25)}" width="${px(0.544)}" height="${px(0.067)}" fill="${LIME}"/>
+  <text x="${px(0.45)}" y="${px(0.45) + pt(36)}" font-family="${FONT}" font-size="${pt(36)}" font-weight="bold" fill="#222">${esc(title)}</text>
+  <rect x="${px(9.99)}" y="${px(0.40)}" width="${px(0.33)}" height="${px(0.82)}" rx="6" fill="#F28C28"/>
+  <text x="${px(10.45)}" y="${px(0.81) + pt(8)}" font-family="${FONT}" font-size="${pt(22)}" font-weight="bold" fill="#222">Individual work</text>
+  <rect x="0" y="${px(6.829)}" width="${W}" height="${px(0.525)}" fill="${GREEN}"/>
+  <rect x="0" y="${px(7.307)}" width="${W}" height="${px(0.262)}" fill="${LIME}"/>`;
+}
+const ROW0 = 1.88, PITCH = (6.76 - 1.88) / 5, CARD_H = PITCH - 0.1;
+
+function rowBase(i) {
+  const y = ROW0 + i * PITCH, mid = px(y + CARD_H / 2);
+  return { y, mid, svg: `<rect x="${px(0.45)}" y="${px(y)}" width="${px(12.43)}" height="${px(CARD_H)}" rx="10" fill="${CARD}" stroke="${GREEN}" stroke-width="2"/>
+    <circle cx="${px(0.86)}" cy="${mid}" r="${px(0.24)}" fill="${GREEN}"/>
+    <text x="${px(0.86)}" y="${mid + pt(7)}" text-anchor="middle" font-family="${FONT}" font-size="${pt(20)}" font-weight="bold" fill="#fff">${i + 1}</text>` };
+}
+function plus1(cx, mid) {
+  return `<circle cx="${cx}" cy="${mid}" r="${px(0.24)}" fill="${GREEN}"/>
+    <text x="${cx}" y="${mid + pt(5.5)}" text-anchor="middle" font-family="${FONT}" font-size="${pt(15)}" font-weight="bold" fill="#fff">+1</text>`;
+}
+function quizSVG() {
+  let body = "";
+  QUESTIONS.forEach((q, i) => {
+    const r = rowBase(i); body += r.svg;
+    const codeX = 8.1, textRight = q.code ? codeX - (q.plus1 ? 0.75 : 0.2) : (q.plus1 ? 12.1 : 12.7);
+    body += textBlock(q.q, px(1.25), r.mid, 20, px(textRight - 1.25));
+    if (q.plus1) body += plus1(px(textRight + 0.37), r.mid);
+    if (q.code) {
+      const bx = px(codeX), by = px(r.y + 0.08), bh = px(CARD_H - 0.16), size = pt(16);
+      body += `<rect x="${bx}" y="${by}" width="${px(4.65)}" height="${bh}" fill="#fff" stroke="#333" stroke-width="1.5"/>`;
+      const lh = size * 1.25; let y = r.mid - (q.code.length * lh) / 2 + size * 0.85;
+      q.code.forEach((line, n) => {
+        body += `<text x="${bx + 8}" y="${y.toFixed(1)}" font-family="${MONO}" font-size="${size}" font-weight="bold" fill="${GREEN}">${n + 1}</text>`;
+        body += `<text x="${bx + 34}" y="${y.toFixed(1)}" font-family="${MONO}" font-size="${size}" fill="#222" xml:space="preserve">${esc(line)}</text>`;
+        y += lh;
+      });
+    }
+  });
+  return svgWrap(frame("Do Now") +
+    `<text x="${px(0.45)}" y="${px(1.55)}" font-family="${FONT}" font-size="${pt(16)}" fill="#222"><tspan font-weight="bold" text-decoration="underline">Date: __ / __ / __</tspan> (write and underline it) · Silent · Stuck? Leave a gap</text>` + body);
+}
+function answersSVG() {
+  let body = "";
+  QUESTIONS.forEach((q, i) => {
+    const r = rowBase(i); body += r.svg;
+    body += textBlock(q.short, px(1.25), r.mid, 20, px(5.1));
+    body += `<rect x="${px(6.6)}" y="${px(r.y + 0.08)}" width="${px(6.15)}" height="${px(CARD_H - 0.16)}" rx="6" fill="#fff" stroke="${GREEN}" stroke-width="2"/>`;
+    body += textBlock(q.ans, px(6.8), r.mid, 18, px(5.8));
+  });
+  return svgWrap(frame("Do Now: answers") + body);
+}
+function svgWrap(inner) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W.toFixed(0)}" height="${H}" viewBox="0 0 ${W} ${H}">${inner}</svg>`;
+}
+
+// ---- Table versions (HTML with inline styles, which PowerPoint reads on paste) ----
+const md = s => esc(s).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+const cell = "border:1pt solid #008741;padding:4pt 6pt;vertical-align:middle;";
+function quizTable() {
+  const rows = QUESTIONS.map((q, i) => `<tr>
+    <td style="${cell}background:#008741;color:#ffffff;font-weight:bold;text-align:center;width:40pt">${i + 1}</td>
+    <td style="${cell}background:#D9F3D0;font-family:Aptos,Calibri,sans-serif;font-size:20pt">${md(q.q)}${q.plus1 ? ' <b style="color:#008741">(+1)</b>' : ""}</td>
+    <td style="${cell}background:#ffffff;font-family:Consolas,monospace;font-size:16pt">${q.code ? q.code.map((l, n) => `<b style="color:#008741">${n + 1}</b>&nbsp;${esc(l).replace(/ /g, "&nbsp;")}`).join("<br>") : ""}</td></tr>`).join("");
+  return `<table style="border-collapse:collapse;font-family:Aptos,Calibri,sans-serif;font-size:20pt">${rows}</table>`;
+}
+function answersTable() {
+  const rows = QUESTIONS.map((q, i) => `<tr>
+    <td style="${cell}background:#008741;color:#ffffff;font-weight:bold;text-align:center;width:40pt">${i + 1}</td>
+    <td style="${cell}background:#D9F3D0;font-size:20pt">${md(q.short)}</td>
+    <td style="${cell}background:#ffffff;font-size:18pt">${md(q.ans)}</td></tr>`).join("");
+  return `<table style="border-collapse:collapse;font-family:Aptos,Calibri,sans-serif">${rows}</table>`;
+}
+const plain = list => list.map((q, i) => `${i + 1}. ${(q.q ?? q).replace(/\*\*/g, "")}${q.code ? "\n   " + q.code.join("\n   ") : ""}`).join("\n");
+
+// ---- Clipboard ----
+function svgToPng(svg, scale = 2) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = Math.round(W * scale); c.height = Math.round(H * scale);
+      const ctx = c.getContext("2d"); ctx.scale(scale, scale); ctx.drawImage(img, 0, 0);
+      c.toBlob(b => b ? resolve(b) : reject(new Error("PNG conversion failed")), "image/png");
+    };
+    img.onerror = () => reject(new Error("Could not draw the SVG"));
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
+}
+const ACTIONS = {
+  "quiz-png":  () => ({ "image/png": svgToPng(quizSVG()) }),
+  "ans-png":   () => ({ "image/png": svgToPng(answersSVG()) }),
+  "quiz-svg":  () => ({ "image/svg+xml": new Blob([quizSVG()], { type: "image/svg+xml" }) }),
+  "quiz-table":() => ({ "text/html": new Blob([quizTable()], { type: "text/html" }),
+                        "text/plain": new Blob([plain(QUESTIONS)], { type: "text/plain" }) }),
+  "ans-table": () => ({ "text/html": new Blob([answersTable()], { type: "text/html" }),
+                        "text/plain": new Blob([QUESTIONS.map((q, i) => `${i + 1}. ${q.short} ${q.ans.replace(/\*\*/g, "")}`).join("\n")], { type: "text/plain" }) }),
+};
+document.querySelectorAll("button[data-copy]").forEach(btn => {
+  btn.onclick = async () => {
+    const key = btn.dataset.copy, out = document.getElementById(key.startsWith("ans") ? "msg-ans" : "msg-quiz");
+    out.className = "msg"; out.textContent = "Copying…";
+    try {
+      if (!navigator.clipboard || !window.ClipboardItem) throw new Error("this browser has no clipboard API");
+      const data = ACTIONS[key]();
+      for (const type of Object.keys(data))
+        if (ClipboardItem.supports && !ClipboardItem.supports(type)) throw new Error("this browser can't copy " + type);
+      await navigator.clipboard.write([new ClipboardItem(data)]);
+      out.className = "msg ok"; out.textContent = "✔ Copied (" + btn.textContent.replace(/^\w\. /, "") + "). Now press Ctrl+V on a PowerPoint slide.";
+    } catch (e) {
+      out.className = "msg no"; out.textContent = "✘ Copy failed: " + e.message;
+    }
+  };
+});
+
+document.getElementById("quizPreview").innerHTML = quizSVG();
+document.getElementById("ansPreview").innerHTML = answersSVG();
+document.getElementById("env").textContent = "Browser: " + navigator.userAgent;
+</script>
+</body>
+</html>
