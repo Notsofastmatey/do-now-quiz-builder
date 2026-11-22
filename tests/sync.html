@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en-GB">
+<head><meta charset="utf-8"><title>Sync tests</title>
+<style>body{font-family:Consolas,monospace;margin:20px} .ok{color:#00642D} .no{color:#B00020}</style></head>
+<body>
+<h1>GitHub sync tests</h1>
+<p>Uses a pretend GitHub (nothing is sent anywhere) and two pretend computers with their own storage.</p>
+<div id="out">Running…</div>
+<script src="../vendor/pptxgen.bundle.js"></script>
+<script src="../js/icon.js"></script>
+<script src="../js/generators.js"></script>
+<script src="../js/slides.js"></script>
+<script src="../js/data.js"></script>
+<script>
+(async () => {
+  const D = DoNowData, API = "https://mock.github.test", res = [];
+  const check = (name, ok, extra = "") => res.push({ name, ok: !!ok, extra });
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  for (const k of Object.keys(localStorage)) if (k.startsWith("donow.synctest")) localStorage.removeItem(k);
+
+  // ---- pretend GitHub: one private repo, one file, sha changes on every write ----
+  const repo = { private: true, file: null, sha: null, n: 0 }, calls = [];
+  const realFetch = window.fetch.bind(window);
+  const enc = s => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+  const remote = () => repo.file && JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(repo.file), c => c.charCodeAt(0))));
+  const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  window.fetch = async (url, opts = {}) => {
+    if (!String(url).startsWith(API)) return realFetch(url, opts);
+    const m = opts.method || "GET", path = String(url).slice(API.length);
+    calls.push(m + " " + path);
+    if (opts.headers.Authorization !== "Bearer good-token") return json(401, {});
+    if (path === "/repos/me/data" && m === "GET") return json(200, { private: repo.private });
+    if (path !== "/repos/me/data/contents/data.json") return json(404, {});
+    if (m === "GET") return repo.file ? json(200, { sha: repo.sha, content: repo.file.replace(/(.{60})/g, "$1\n") }) : json(404, {});
+    const b = JSON.parse(opts.body);
+    if ((b.sha || null) !== repo.sha) return json(repo.sha && !b.sha ? 422 : 409, {});
+    repo.file = b.content; repo.sha = "sha" + (++repo.n);
+    return json(repo.n === 1 ? 201 : 200, { content: { sha: repo.sha } });
+  };
+  D.sync.api = API;
+  const slot = id => [{ kind: "q", id, plus1: false }];
+  const CLS = "10CP1 (2026-28)";
+
+  // 1. Computer A connects (wrong token, public repo, then properly) and saves things
+  await D.init("../bank.json", "donow.synctest.A");
+  try { await D.sync.connect("me/data", "bad"); check("bad token refused", false); } catch (e) { check("bad token refused", /token/.test(e.message), e.message); }
+  repo.private = false;
+  try { await D.sync.connect("me/data", "good-token"); check("public repo refused", false); } catch (e) { check("public repo refused", /public/.test(e.message), e.message); }
+  repo.private = true; D.sync.disconnect();
+  await D.sync.connect("https://github.com/me/data", "good-token");
+  check("connect creates data.json", remote() && remote().app === "do-now-quiz-builder");
+  D.record(CLS, slot("binary-01"), "");
+  const q1 = D.bank.questions[0];
+  D.saveCustom({ ...q1, id: "mine-binary-1", q: "My own binary question?" });
+  await D.sync.push();
+  check("A's quiz and question reach GitHub", remote().history[CLS]?.length === 1 && remote().custom.length === 1);
+  check("token is not in data.json", !atob(repo.file).includes("good-token"));
+  check("token is not in the export", !JSON.stringify(D.exportAll()).includes("good-token"));
+  const putsBefore = calls.filter(c => c.startsWith("PUT")).length;
+  D.setPref("lang", "erl"); D.setSlots(CLS, slot("hex-01")); await D.sync.push();
+  check("changing prefs/slots doesn't save to GitHub", calls.filter(c => c.startsWith("PUT")).length === putsBefore);
+  const atA = D.history(CLS)[0].at;
+
+  // 2. Computer B: connects with the same token, sees A's data, deletes A's quiz and adds its own
+  localStorage.setItem("donow.synctest.B.sync", JSON.stringify({ repo: "me/data", token: "good-token" }));
+  await D.init("../bank.json", "donow.synctest.B");
+  check("B loads A's quiz", D.history(CLS).some(q => q.at === atA));
+  check("B loads A's own question", !!D.qById("mine-binary-1"));
+  D.removeHistory(CLS, atA);
+  await wait(5);
+  D.record(CLS, slot("hex-01"), "");
+  const w = D.where(CLS); D.setWhere(CLS, { last: "hex", taught: w.taught });
+  D.deleteCustom("mine-binary-1");
+  await D.sync.push();
+
+  // 3. Back on A: A still has the old quiz locally, but B deleted it
+  await D.init("../bank.json", "donow.synctest.A");
+  check("B's deletion of a quiz reaches A", !D.history(CLS).some(q => q.at === atA));
+  check("B's new quiz reaches A", D.history(CLS).some(q => q.items[0].id === "hex-01"));
+  check("B's 'Where are we?' reaches A", D.where(CLS).last === "hex");
+  check("B's deleted question stays deleted on A", !D.qById("mine-binary-1"));
+
+  // 4. Clash: the other computer saves while A is about to save
+  const other = remote(); other.history[CLS].unshift({ at: "2099-01-01T00:00:00.000Z", date: "", sig: "x", items: [{ kind: "q", id: "cpu-01", topic: "cpu" }] });
+  repo.file = enc(JSON.stringify(other)); repo.sha = "sha" + (++repo.n);
+  D.record(CLS, slot("units-03"), "");
+  await D.sync.push();
+  const ids = remote().history[CLS].map(q => q.items[0].id);
+  check("clash: both computers' quizzes kept", ids.includes("cpu-01") && ids.includes("units-03"), ids.join(","));
+  check("clash: status back to saved", D.sync.status.state === "ok", JSON.stringify(D.sync.status));
+
+  // 5. Plans: newer edit wins
+  const hp = JSON.parse(JSON.stringify(D.halfTerms())); hp.oat["Y10 Au1"] = hp.oat["Y10 Au1"].slice().reverse();
+  D.savePlans({ halfTerms: hp, labels: D.planLabels(), classes: D.classes(), archived: ["11CP1 (2025-27)"] });
+  await D.sync.push();
+  await D.init("../bank.json", "donow.synctest.B");
+  check("plan and archive changes reach B", D.archived().includes("11CP1 (2025-27)") && D.halfTerms().oat["Y10 Au1"][0] === hp.oat["Y10 Au1"][0]);
+
+  // 6. Disconnect removes the token
+  D.sync.disconnect();
+  check("disconnect forgets the token", !localStorage.getItem("donow.synctest.B.sync") && !D.sync.config());
+
+  for (const k of Object.keys(localStorage)) if (k.startsWith("donow.synctest")) localStorage.removeItem(k);
+  window.fetch = realFetch;
+  const bad = res.filter(r => !r.ok);
+  window.TEST_RESULT = { passed: res.length - bad.length, failed: bad };
+  document.getElementById("out").innerHTML = `<p class="${bad.length ? "no" : "ok"}"><b>${res.length - bad.length} passed, ${bad.length} failed</b></p>` +
+    res.map(r => `<div class="${r.ok ? "ok" : "no"}">${r.ok ? "✔" : "✘"} ${r.name} ${r.ok ? "" : r.extra}</div>`).join("");
+})().catch(e => { document.getElementById("out").textContent = "Crashed: " + e.stack; window.TEST_RESULT = { crashed: e.stack }; });
+</script>
+</body>
+</html>

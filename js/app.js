@@ -413,6 +413,34 @@
     $("#plansModal").classList.remove("open"); renderClassSelect(); renderAll(); toast("Saved. The question bank now follows the new order.");
   };
 
+  // ---------- save to GitHub ----------
+  const SY = D.sync;
+  const syncLabel = st => ({ off: "Not saved online", busy: (st.msg || "Saving") + "…", ok: "Saved online", error: "Not saved: " + st.msg }[st.state] || "");
+  function renderSync(st = SY.status) {
+    $("#syncTxt").textContent = syncLabel(st);
+    $("#syncBtn").style.borderColor = st.state === "error" ? "#ffb4b4" : "";
+    $("#syncBtn").title = st.state === "error" ? "Couldn't save to GitHub: " + st.msg : "Save to GitHub so every computer has the same history and questions";
+    const cfg = SY.config();
+    $("#syncOn").hidden = !cfg; $("#syncOff").hidden = !!cfg;
+    $("#syncConnect").hidden = !!cfg; $("#syncDisconnect").hidden = !cfg; $("#syncNow").hidden = !cfg;
+    if (cfg) { $("#syncRepo").textContent = cfg.repo; $("#syncState").textContent = st.state === "error" ? "Problem: " + st.msg : syncLabel(st) + "."; }
+  }
+  SY.onSync(st => { renderSync(st); if (st.remoteChange) afterRemote(); });
+  function afterRemote() {
+    if (!D.activeClasses().includes(cls)) { cls = D.activeClasses()[0]; slots = D.slotsFor(cls).slice(); }
+    renderClassSelect(); renderAll();
+  }
+  $("#syncBtn").onclick = () => { $("#syncErr").textContent = ""; $("#syncToken").value = ""; renderSync(); $("#syncModal").classList.add("open"); };
+  $("#syncConnect").onclick = async () => {
+    $("#syncErr").textContent = ""; $("#syncConnect").disabled = true;
+    try { await SY.connect($("#syncRepoIn").value, $("#syncToken").value); $("#syncToken").value = ""; afterRemote(); toast("Connected. This computer now saves to GitHub."); }
+    catch (e) { SY.disconnect(); $("#syncErr").textContent = "✘ " + e.message; }
+    finally { $("#syncConnect").disabled = false; renderSync(); }
+  };
+  $("#syncDisconnect").onclick = () => { SY.disconnect(); renderSync(); toast("Disconnected. The token is removed from this computer; your data stays here and on GitHub."); };
+  $("#syncNow").onclick = async () => { if (await SY.refresh(0)) afterRemote(); };
+  document.addEventListener("visibilitychange", async () => { if (document.visibilityState === "visible" && await SY.refresh()) afterRemote(); });
+
   // ---------- everything ----------
   function renderAll() {
     const w = D.where(cls);

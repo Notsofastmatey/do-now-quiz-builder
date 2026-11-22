@@ -17,6 +17,7 @@
   <label>Date <input type="date" id="date"> <span style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="blank" checked> blank</span></label>
   <span class="spacer"></span>
   <button class="hbtn" id="addBtn">＋ Add question</button>
+  <button class="chip-btn" id="syncBtn" title="Save to GitHub so every computer has the same history and questions">☁ <span id="syncTxt">Not saved online</span></button>
   <button class="hbtn ghost" id="exportBtn" title="Save your questions, plans, classes and history to a file">⇩ Export</button>
   <button class="hbtn ghost" id="importBtn" title="Load an export file (e.g. from your other computer)">⇧ Import</button>
   <input type="file" id="importFile" accept=".json,application/json" hidden>
@@ -181,6 +182,41 @@
       <span class="note">Saved on this computer. Use ⇩ Export to move it to another computer or the shared bank.</span>
       <button class="btn sec" data-close>Cancel</button>
       <button class="btn" id="savePlans">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Save to GitHub -->
+<div class="scrim" id="syncModal">
+  <div class="modal" style="width:min(640px,96vw)">
+    <header><h1 style="font-size:16px">☁ Save to GitHub</h1></header>
+    <div class="mbody">
+      <p class="hint" style="margin-top:0">Your history, own questions, plans, classes and “Where are we?” are saved to <b>data.json</b> in a <b>private</b> repo,
+        so every computer you connect shows the same thing. The page itself stays public; you don't sign in to GitHub to use it.</p>
+      <div id="syncOn" hidden>
+        <p>Connected to <b id="syncRepo"></b>. <span id="syncState"></span></p>
+        <p class="hint">Changes save automatically a moment after you make them, and load when you open the app or come back to its tab.</p>
+      </div>
+      <div id="syncOff">
+        <ol class="hint" style="padding-left:18px;line-height:1.6">
+          <li>On GitHub, make a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">fine-grained token</a>:
+            <b>Only select repositories</b> → your data repo; <b>Repository permissions → Contents: Read and write</b>; set an expiry date.</li>
+          <li>Copy the token, paste it below and press Connect. Keep it in your password manager to use on other computers.</li>
+        </ol>
+        <div class="form">
+          <label for="syncRepoIn">Data repo</label><input id="syncRepoIn" value="Notsofastmatey/do-now-data" spellcheck="false">
+          <label for="syncToken">Token</label><input id="syncToken" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+          <div class="err" id="syncErr"></div>
+        </div>
+        <p class="hint">The token is kept only in this browser on this computer. It is never put in exports or in the repo. On a shared computer, press Disconnect when you've finished.</p>
+      </div>
+    </div>
+    <div class="mfoot">
+      <span class="note">Export / Import still work as a backup.</span>
+      <button class="btn sec" id="syncDisconnect" style="color:#a33" hidden>Disconnect this computer</button>
+      <button class="btn sec" id="syncNow" hidden>Sync now</button>
+      <button class="btn sec" data-close>Close</button>
+      <button class="btn" id="syncConnect">Connect</button>
     </div>
   </div>
 </div>
