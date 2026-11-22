@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en-GB">
+<head><meta charset="utf-8"><title>Generator tests</title>
+<style>body{font-family:Consolas,monospace;margin:20px} .ok{color:#00642D} .no{color:#B00020} pre{white-space:pre-wrap}</style></head>
+<body>
+<h1>Generator tests</h1>
+<p>Replays every run recorded from <code>generators.py</code> (same random choices) and checks the JavaScript port gives identical text.</p>
+<div id="out">Running…</div>
+<script src="../js/generators.js"></script>
+<script>
+(async () => {
+  const { GENERATORS, ReplayRNG } = window.DoNowGen;
+  const vec = await (await fetch("vectors.json")).json();
+  const fields = ["q", "ans", "short", "code", "lang", "misc", "marks"];
+  let pass = 0, fail = 0; const errors = [], missing = [];
+  for (const [gid, v] of Object.entries(vec)) {
+    const f = GENERATORS[gid];
+    if (!f) { missing.push(gid); continue; }
+    v.runs.forEach((run, n) => {
+      try {
+        const rng = new ReplayRNG(run.log), got = f(rng);
+        if (rng.log.length) throw new Error(`${rng.log.length} RNG values left over`);
+        const bad = fields.filter(k => JSON.stringify(got[k]) !== JSON.stringify(run.out[k]));
+        if (bad.length) { fail++; errors.push(`${gid} #${n}: ${bad.map(k => `\n  ${k}: expected ${JSON.stringify(run.out[k])}\n  ${" ".repeat(k.length)}  got      ${JSON.stringify(got[k])}`).join("")}`); }
+        else pass++;
+      } catch (e) { fail++; errors.push(`${gid} #${n}: ${e.message}`); }
+    });
+  }
+  const extra = Object.keys(GENERATORS).filter(k => !vec[k]);
+  window.TEST_RESULT = { pass, fail, missing, extra, errors: errors.slice(0, 30) };
+  document.getElementById("out").innerHTML =
+    `<p class="${fail || missing.length ? "no" : "ok"}"><b>${pass} passed, ${fail} failed</b> across ${Object.keys(vec).length} generators.</p>` +
+    (missing.length ? `<p class="no">Not ported: ${missing.join(", ")}</p>` : "") +
+    (extra.length ? `<p class="no">Extra (not in reference): ${extra.join(", ")}</p>` : "") +
+    `<pre>${errors.slice(0, 30).join("\n\n").replace(/</g, "&lt;")}</pre>`;
+})();
+</script>
+</body>
+</html>

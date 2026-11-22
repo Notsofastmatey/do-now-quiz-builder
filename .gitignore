@@ -3,3 +3,13 @@
 *.zip
 *.pptx
 *.docx
+# local only: notes, reference scripts and prototypes
+CLAUDE.md
+HANDOVER.md
+*.py
+__pycache__/
+mockup/
+.claude/
+examples.json
+erl.md
+gcse-coverage.md

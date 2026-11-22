@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en-GB">
+<head><meta charset="utf-8"><title>Quiz tests</title>
+<style>body{font-family:Consolas,monospace;margin:20px} .ok{color:#00642D} .no{color:#B00020} pre{white-space:pre-wrap}</style></head>
+<body>
+<h1>Suggest 5 and layout tests</h1>
+<p>Builds 200 random quizzes per class and language, and checks every bank question and generator on its own.
+Uses its own storage, so your saved data isn't touched.</p>
+<div id="out">Running…</div>
+<script>localStorage.removeItem("donow.test");</script>
+<script src="../vendor/pptxgen.bundle.js"></script>
+<script src="../js/icon.js"></script>
+<script src="../js/generators.js"></script>
+<script src="../js/slides.js"></script>
+<script src="../js/data.js"></script>
+<script src="../js/suggest.js"></script>
+<script>
+(async () => {
+  const D = DoNowData, S = DoNowSlides, SG = DoNowSuggest, GEN = DoNowGen;
+  await D.init("../bank.json", "donow.test");
+  const errs = [], stats = {}; let quizzes = 0;
+  const err = m => { if (errs.length < 60) errs.push(m); };
+  const bad = s => /undefined|NaN|\[object|Infinity/.test(s);
+
+  // 1. Every fixed question and every generator (100 rolls) on its own
+  const fill = q => [q, ...Array(4).fill({ q: "Short question?", short: "Short", ans: "Short answer", level: "recall", marks: 1 })];
+  for (const q of D.questions()) {
+    for (const k of ["q", "ans", "short"]) if (!q[k] || bad(q[k])) err(`${q.id}: missing/bad ${k}`);
+    if (!S.quizSlide(fill(q)).fits) err(`${q.id}: quiz row doesn't fit even with 4 short questions`);
+    if (!S.answersSlide(fill(q)).fits) err(`${q.id}: answer row doesn't fit even with 4 short questions`);
+    if (q.code && !S.codeFits(q.code, 11)) err(`${q.id}: a code line wraps even at 11 pt`);
+  }
+  for (const g of D.generators()) for (let i = 0; i < 100; i++) {
+    const r = D.resolve({ kind: "g", id: g.id, seed: i * 7919 + 1 });
+    for (const k of ["q", "ans", "short"]) if (!r[k] || bad(r[k])) err(`${g.id} seed ${i}: missing/bad ${k}: ${r[k]}`);
+    if (r.code && r.code.some(bad)) err(`${g.id} seed ${i}: bad code`);
+    if (!S.quizSlide(fill(r)).fits || !S.answersSlide(fill(r)).fits) err(`${g.id} seed ${i}: doesn't fit even with 4 short questions`);
+    if (r.code && !S.codeFits(r.code, 11)) err(`${g.id} seed ${i}: code wraps at 11 pt`);
+  }
+
+  // 2. 200 random suggested quizzes per class × language
+  for (const cls of D.activeClasses()) for (const lang of ["python", "erl"]) {
+    const key = `${cls} / ${lang}`, st = stats[key] = { quizzes: 0, overflow: 0, smallest: 0, noCode: 0, noCalc: 0, noExplain: 0, noExam: 0 };
+    const w = D.where(cls), taught = new Set(w.taught);
+    for (let n = 0; n < 200; n++) {
+      const r = SG.suggestFitting(cls, { lang, includeExam: true });
+      const qs = r.slots.filter(Boolean).map(s => D.resolve(s));
+      quizzes++; st.quizzes++;
+      if (qs.length !== 5) { err(`${key}: only ${qs.length} questions (${r.warning})`); continue; }
+      const topics = qs.map(q => q.topic);
+      if (new Set(topics).size !== 5) err(`${key}: repeated topic ${topics}`);
+      if (topics.some(t => !taught.has(t))) err(`${key}: untaught topic in ${topics}`);
+      const lastHas = D.questions().some(q => q.topic === w.last && D.langOK(q, lang, false)) || D.generators().some(g => g.topic === w.last && D.langOK(g, lang, true));
+      if (lastHas && qs[0].topic !== w.last) err(`${key}: Q1 is ${qs[0].topic}, not the last taught ${w.last}`);
+      if (!lastHas && !r.warning.includes("Q1 is from")) err(`${key}: Q1 fallback not explained`);
+      if (r.slots.filter(s => s && s.plus1).length !== 1) err(`${key}: not exactly one +1`);
+      const codeN = qs.filter(q => q.code && q.code.length).length;
+      if (codeN > 2) err(`${key}: ${codeN} code questions`);
+      if (!codeN) st.noCode++;
+      if (!qs.some(q => D.isCalc(q, q.gen))) st.noCalc++;
+      if (!qs.some(q => q.level === "explain")) st.noExplain++;
+      if (!qs.some(q => q.style === "exam")) st.noExam++;
+      for (const q of qs) {
+        for (const k of ["q", "ans", "short"]) if (!q[k] || bad(q[k])) err(`${key}: ${q.id} bad ${k}`);
+        if (q.code && !D.langOK(q, lang, q.gen)) err(`${key}: ${q.id} wrong language`);
+      }
+      const qz = S.quizSlide(qs), an = S.answersSlide(qs);
+      if (!qz.fits || !an.fits) st.overflow++;
+      if (qz.sizes.q === 16 && qz.sizes.code === 11) st.smallest++;
+      for (const q of qs) if (q.code && !S.codeFits(q.code, qz.sizes.code)) err(`${key}: code wraps in ${q.id}`);
+      // record so "recent" logic and usage weighting are exercised
+      D.record(cls, r.slots, "");
+    }
+  }
+  localStorage.removeItem("donow.test");
+  window.TEST_RESULT = { quizzes, errors: errs, stats };
+  const okAll = !errs.length && Object.values(stats).every(s => !s.overflow);
+  document.getElementById("out").innerHTML = `<p class="${okAll ? "ok" : "no"}"><b>${quizzes} quizzes, ${errs.length} problems</b></p><pre>${JSON.stringify(stats, null, 1)}\n\n${errs.join("\n").replace(/</g, "&lt;")}</pre>`;
+})();
+</script>
+</body>
+</html>

@@ -1,10 +1,198 @@
 <!doctype html>
 <html lang="en-GB">
-<head><meta charset="utf-8"><title>Do Now Quiz Builder</title></head>
-<body style="font-family: Aptos, 'Segoe UI', sans-serif; background:#F3F3F3; margin:2em;">
-<h1>Do Now Quiz Builder</h1>
-<p>Coming soon: a builder for GCSE Computer Science (OCR J277) Do Now retrieval quizzes.</p>
-<p><a href="paste-test/">Paste test</a>: copy a sample quiz to the clipboard in different formats.</p>
-<p>PowerPoint add-in test: <a href="addin-test/manifest.xml">manifest.xml</a> (right-click → Save link as…)</p>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Do Now Quiz Builder</title>
+<link rel="icon" href="img/individual-work.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header>
+  <h1>Do Now Quiz Builder</h1>
+  <label>Class <select id="cls"></select> <button class="chip-btn" id="plansBtn" title="Classes and course plans" style="padding:4px 8px">⚙</button></label>
+  <button class="chip-btn" id="whereBtn" title="Where is this class up to?">📍 <span id="whereTxt"></span></button>
+  <label>Code <span class="seg" id="langSeg"><button data-l="python">Python</button><button data-l="erl">ERL</button></span></label>
+  <label>Date <input type="date" id="date"> <span style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="blank" checked> blank</span></label>
+  <span class="spacer"></span>
+  <button class="hbtn" id="addBtn">＋ Add question</button>
+  <button class="hbtn ghost" id="exportBtn" title="Save your questions, plans, classes and history to a file">⇩ Export</button>
+  <button class="hbtn ghost" id="importBtn" title="Load an export file (e.g. from your other computer)">⇧ Import</button>
+  <input type="file" id="importFile" accept=".json,application/json" hidden>
+</header>
+
+<main>
+  <!-- Left: question bank -->
+  <section class="panel">
+    <h2>Question bank <small id="bankCount"></small></h2>
+    <div class="bank-tools">
+      <input type="search" id="search" placeholder="Search questions…">
+      <div class="filters" id="filters">
+        <button class="f" data-f="recall">Recall</button>
+        <button class="f" data-f="apply">Apply</button>
+        <button class="f" data-f="explain">Explain</button>
+        <button class="f" data-f="code">Has code</button>
+        <button class="f" data-f="gen">Generator</button>
+        <button class="f" data-f="exam">Exam-style</button>
+        <button class="f" data-f="m2">2+ marks</button>
+        <button class="f" data-f="mine">Mine</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="seg2" id="viewSeg"><button data-v="plan" class="on">By half term</button><button data-v="least">Least asked first</button></span>
+        <button class="sbtn" id="covBtn" title="Topic coverage for this class">📊 Coverage</button>
+      </div>
+    </div>
+    <div class="tree" id="tree"></div>
+  </section>
+
+  <!-- Centre: preview + slots -->
+  <section class="panel centre">
+    <div class="tabs">
+      <button class="tab on" data-t="quiz">Quiz slide</button>
+      <button class="tab" data-t="ans">Answers slide</button>
+      <span class="fit" id="fit"></span>
+    </div>
+    <div class="warnbar" id="warnbar"></div>
+    <div class="slide-wrap" id="slide"></div>
+    <div class="cover-tip" id="coverTip" hidden>The cover is shown faded so you can check the answers. <a href="#" id="coverToggle">Show it solid</a></div>
+    <div class="slots" id="slots"></div>
+  </section>
+
+  <!-- Right: actions -->
+  <section class="right">
+    <div class="panel">
+      <h2>Build</h2>
+      <div class="box">
+        <button class="big" id="suggestBtn">✨ Suggest 5</button>
+        <label class="hint" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="incExam"> Include 1 exam-style question</label>
+        <div class="hint">Checks “Where are we?” first, then picks: Q1 from the latest topic, Q2–5 spread across earlier topics, <b>favouring topics asked least and longest ago</b>, with a code, a calculation and an explain question.</div>
+        <button class="sbtn" id="clearBtn" style="justify-self:start">Clear all slots</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Into PowerPoint</h2>
+      <div class="box out">
+        <button class="obtn" data-o="svg-quiz"><b>Copy quiz (editable)</b><span>Paste, then right-click → Convert to Shape</span></button>
+        <button class="obtn" data-o="svg-ans"><b>Copy answers (editable)</b><span>Comes with the drag-away cover</span></button>
+        <button class="obtn" data-o="png"><b>Copy as picture</b><span>Quick paste of the slide showing</span></button>
+        <button class="obtn" data-o="pptx"><b>Download .pptx</b><span>Both slides + speaker notes. Insert with Reuse Slides</span></button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Recent quizzes <small>this class</small></h2>
+      <div class="box"><ul class="hist" id="hist"></ul>
+        <div class="hint">Saved when you copy or download a quiz. Questions from the last 10 are skipped by Suggest 5. Press ✕ if you didn't use one.</div></div>
+    </div>
+  </section>
+</main>
+
+<!-- Where are we? -->
+<div class="scrim" id="whereModal">
+  <div class="modal">
+    <header><h1 style="font-size:16px">📍 Where is <span id="waClass"></span> up to?</h1></header>
+    <div class="mbody">
+      <p class="hint" style="margin-top:0">Click topics to tick them as taught. <b>Double-click</b> the topic you taught most recently (orange). Suggest 5 only uses ticked topics.</p>
+      <div id="waBody"></div>
+    </div>
+    <div class="mfoot">
+      <span class="note">Saved for this class on this computer.</span>
+      <button class="btn sec" data-close>Cancel</button>
+      <button class="btn" id="waConfirm">Confirm and suggest 5</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / edit question -->
+<div class="scrim" id="addModal">
+  <div class="modal">
+    <header><h1 style="font-size:16px" id="fTitle">＋ Add your own question</h1></header>
+    <div class="mbody">
+      <div class="form">
+        <label for="fTopic">Topic</label><select id="fTopic"></select>
+        <label for="fQ">Question</label><textarea id="fQ" placeholder="Use **bold** for key words, e.g. State the **purpose** of the ALU."></textarea>
+        <label for="fCode">Code <small>(optional)</small></label>
+        <div><textarea class="code" id="fCode" placeholder='x = 5&#10;print("x is " + str(x * 2))'></textarea>
+          <select id="fLang" style="width:auto;margin-top:6px"><option value="python">Python</option><option value="erl">OCR ERL</option><option value="sql">SQL</option></select></div>
+        <label for="fAns">Answer</label><textarea id="fAns" placeholder="Answer plus a brief why, e.g. **10**: x * 2 is 10"></textarea>
+        <label for="fShort">Short label</label><input id="fShort" placeholder="Reminder for the answers slide, e.g. Output of x code?">
+        <label>Details</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <select id="fMarks" style="width:auto"><option value="1">1 mark</option><option value="2">2 marks</option><option value="3">3 marks</option></select>
+          <select id="fLevel" style="width:auto"><option value="recall">Recall</option><option value="apply">Apply</option><option value="explain">Explain</option></select>
+          <select id="fStyle" style="width:auto"><option value="quiz">Quiz style</option><option value="exam">Exam style</option></select>
+          <label style="font-weight:400;padding:0;display:flex;gap:5px;align-items:center"><input type="checkbox" id="fPlus1" style="width:auto"> +1 (stretch)</label>
+        </div>
+        <label for="fMisc">Watch for</label><input id="fMisc" placeholder="Optional misconception, shown in the answers speaker notes">
+        <div class="warnmsg" id="fWarn"></div>
+        <div class="err" id="fErr"></div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <span class="note">Use invented names only. Saved on this computer; Export to share.</span>
+      <button class="btn sec" id="fDelete" style="display:none;color:#a33">Delete</button>
+      <button class="btn sec" data-close>Cancel</button>
+      <button class="btn" id="fSave">Save question</button>
+    </div>
+  </div>
+</div>
+
+<!-- Topic coverage -->
+<div class="scrim" id="covModal">
+  <div class="modal" style="width:min(900px,96vw)">
+    <header><h1 style="font-size:16px">📊 Topic coverage: <span id="covClass"></span></h1></header>
+    <div class="mbody" id="covBody"></div>
+    <div class="mfoot">
+      <span class="note">Counts every quiz you copy or download for this class. Untaught topics aren't shown.</span>
+      <button class="btn" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Classes & course plans -->
+<div class="scrim" id="plansModal">
+  <div class="modal wide">
+    <header><h1 style="font-size:16px">⚙ Classes and course plans</h1></header>
+    <div class="ptabs">
+      <button class="ptab on" data-p="plans">Course plans</button>
+      <button class="ptab" data-p="classes">Classes</button>
+    </div>
+    <div id="pPlans" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="ptools">
+        <label>Plan <select id="planSel"></select></label>
+        <input id="planName" title="Rename this plan" style="width:190px">
+        <button class="btn sec" id="copyPlan">⧉ Copy this plan</button>
+        <span class="hint" id="planUsers"></span>
+        <span class="spacer"></span>
+        <span class="legend"><span><i style="background:var(--green)"></i>Paper 2 (algorithms, programming)</span><span><i style="background:#1d4f86"></i>Paper 1 (computer systems)</span></span>
+      </div>
+      <div class="hint" style="padding:0 16px 6px">Drag topics between half terms or up and down within one. Click a half-term name to rename it. Topics in <b>Not placed yet</b> are left out of the bank tree until you place them.</div>
+      <div class="board" id="board"></div>
+    </div>
+    <div id="pClasses" style="display:none;flex:1;overflow:auto">
+      <table class="ctable">
+        <thead><tr><th>Class</th><th>Course plan</th><th>Last taught</th><th>Quizzes so far</th><th></th></tr></thead>
+        <tbody id="ctBody"></tbody>
+      </table>
+      <div style="padding:0 16px"><button class="btn sec" id="addClass">＋ Add a class</button>
+        <p class="hint">Use the class code and years only (e.g. 10CP2 (2027-29)). No pupil details are stored anywhere.</p></div>
+    </div>
+    <div class="mfoot">
+      <span class="note">Saved on this computer. Use ⇩ Export to move it to another computer or the shared bank.</span>
+      <button class="btn sec" data-close>Cancel</button>
+      <button class="btn" id="savePlans">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="vendor/pptxgen.bundle.js"></script>
+<script src="js/icon.js"></script>
+<script src="js/generators.js"></script>
+<script src="js/slides.js"></script>
+<script src="js/data.js"></script>
+<script src="js/suggest.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
