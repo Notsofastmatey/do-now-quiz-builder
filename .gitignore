@@ -1,0 +1,5 @@
+# Never publish source material: OCR papers/mark schemes/reports, the spec, lesson decks
+*.pdf
+*.zip
+*.pptx
+*.docx

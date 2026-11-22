@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Do Now add-in test</title>
+<!-- Office.js must come from Microsoft's CDN; add-ins can't bundle it. -->
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<script src="test-slide.js"></script>
+<style>
+  body { font-family: "Segoe UI", Aptos, sans-serif; margin: 12px; color: #222; background: #F3F3F3; }
+  h1 { font-size: 18px; border-left: 6px solid #008741; padding-left: 8px; }
+  button { display: block; width: 100%; margin: 8px 0; padding: 10px; font-size: 14px; font-weight: 600;
+           color: #fff; background: #008741; border: 0; border-radius: 4px; cursor: pointer; }
+  button:disabled { background: #999; cursor: default; }
+  ul { padding-left: 18px; font-size: 13px; }
+  #log { font-size: 13px; white-space: pre-wrap; background: #fff; border: 1px solid #ccc; padding: 8px; min-height: 3em; }
+  .ok { color: #00642D; } .no { color: #B00020; }
+</style>
+</head>
+<body>
+<h1>Do Now add-in test</h1>
+<p id="status">Loading Office…</p>
+<button id="textbox" disabled>1. Add a text box to this slide</button>
+<button id="slide" disabled>2. Insert a test slide after this one</button>
+<h2 style="font-size:15px">PowerPoint API support</h2>
+<ul id="apis"></ul>
+<div id="log"></div>
+<script>
+const log = (msg, cls) => {
+  const line = document.createElement('div');
+  line.textContent = msg; if (cls) line.className = cls;
+  document.getElementById('log').appendChild(line);
+};
+
+Office.onReady(info => {
+  if (info.host !== Office.HostType.PowerPoint) {
+    document.getElementById('status').textContent =
+      'Office.js loaded, but this is not PowerPoint (host: ' + info.host + '). Open this from PowerPoint.';
+    return;
+  }
+  document.getElementById('status').textContent = 'Running in PowerPoint (' + info.platform + ').';
+
+  const apis = document.getElementById('apis');
+  ['1.1','1.2','1.3','1.4','1.5','1.6','1.7','1.8'].forEach(v => {
+    const ok = Office.context.requirements.isSetSupported('PowerPointApi', v);
+    const li = document.createElement('li');
+    li.textContent = 'PowerPointApi ' + v + ': ' + (ok ? 'yes' : 'no');
+    li.className = ok ? 'ok' : 'no';
+    apis.appendChild(li);
+  });
+
+  const tb = document.getElementById('textbox');
+  const sl = document.getElementById('slide');
+  tb.disabled = !Office.context.requirements.isSetSupported('PowerPointApi', '1.4');
+  sl.disabled = !Office.context.requirements.isSetSupported('PowerPointApi', '1.2');
+  if (tb.disabled) log('Text box test needs PowerPointApi 1.4.', 'no');
+  if (sl.disabled) log('Slide insert needs PowerPointApi 1.2: the app would have to use Download .pptx.', 'no');
+
+  tb.onclick = async () => {
+    try {
+      await PowerPoint.run(async ctx => {
+        const slides = ctx.presentation.getSelectedSlides();
+        slides.load('items');
+        await ctx.sync();
+        const slide = slides.items[0] || ctx.presentation.slides.getItemAt(0);
+        const box = slide.shapes.addTextBox('Hello from the Do Now add-in!',
+          { left: 60, top: 60, width: 420, height: 60 });
+        box.name = 'Add-in test text box';
+        await ctx.sync();
+      });
+      log('Text box added. ✔', 'ok');
+    } catch (e) { log('Text box failed: ' + e.message, 'no'); }
+  };
+
+  sl.onclick = async () => {
+    try {
+      await PowerPoint.run(async ctx => {
+        const opts = { formatting: PowerPoint.InsertSlideFormatting.keepSourceFormatting };
+        if (Office.context.requirements.isSetSupported('PowerPointApi', '1.5')) {
+          const sel = ctx.presentation.getSelectedSlides();
+          sel.load('items/id');
+          await ctx.sync();
+          if (sel.items.length) opts.targetSlideId = sel.items[sel.items.length - 1].id;
+        }
+        ctx.presentation.insertSlidesFromBase64(window.TEST_SLIDE_B64, opts);
+        await ctx.sync();
+      });
+      log('Test slide inserted. ✔ The app can insert quizzes straight into a deck.', 'ok');
+    } catch (e) { log('Slide insert failed: ' + e.message, 'no'); }
+  };
+});
+</script>
+</body>
+</html>
