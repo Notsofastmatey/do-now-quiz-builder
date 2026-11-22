@@ -36,6 +36,7 @@
       <button data-copy="quiz-png">A. Copy as picture</button>
       <button data-copy="quiz-table" class="alt">B. Copy as table</button>
       <button data-copy="quiz-svg" class="exp">C. Copy as SVG (experimental)</button>
+      <button data-copy="quiz-svg1" class="exp">F. Copy as SVG, one text box per question</button>
     </div>
     <div class="msg" id="msg-quiz"></div>
   </div>
@@ -45,6 +46,7 @@
     <div class="btns">
       <button data-copy="ans-png">D. Copy answers as picture</button>
       <button data-copy="ans-table" class="alt">E. Copy answers as table</button>
+      <button data-copy="ans-svgc" class="exp">G. Copy answers as SVG, with cover</button>
     </div>
     <div class="msg" id="msg-ans"></div>
   </div>
@@ -56,7 +58,10 @@
     <li><b>A / D (picture):</b> does it paste as one sharp picture filling the slide? (Drag a corner to fit if not.)</li>
     <li><b>B / E (table):</b> does it paste as a real PowerPoint table? Are the green colours, bold, line breaks and the Consolas code kept? Can you edit the text?</li>
     <li><b>C (SVG):</b> does anything paste? If a picture appears, right-click it: is there <b>Convert to Shape</b>, and does that give editable text?</li>
-    <li><b>Cover test:</b> on a slide, draw a dark green rectangle where the answers go. Paste D, then right-click the picture → <b>Send to Back</b>. Is the cover still on top and draggable in the slideshow?</li>
+    <li><b>F (new):</b> paste, then <b>Convert to Shape</b>. Is each question one text box now (not one per line)? Type extra words into question 1: does the text wrap onto a new line inside the card? Are the bold words and the code still right?</li>
+    <li><b>G (new):</b> paste, <b>Convert to Shape</b>, then press <b>Ctrl+Shift+G</b> once to ungroup. Does the dark green cover sit on top of the answers? Can you drag the cover <i>with its words</i> as one piece? Does the selection pane (Home → Arrange → Selection Pane) call it "Answer cover (drag to reveal)"?</li>
+    <li><b>Icon:</b> is the orange Individual work figure there after Convert to Shape, or does it disappear or go blurry?</li>
+    <li><b>Old cover test (picture):</b> on a slide, draw a dark green rectangle where the answers go. Paste D, then right-click the picture → <b>Send to Back</b>. Is the cover still on top and draggable in the slideshow?</li>
     <li>Note whether you used PowerPoint desktop or PowerPoint in the browser, and which browser.</li>
   </ul>
 </div>
@@ -72,6 +77,9 @@ const QUESTIONS = [
   { q: "**Explain** why RAM is described as volatile.", short: "Why is RAM volatile?",
     ans: "It **loses its contents** when the power is switched off", plus1: true },
 ];
+
+// Orange "Individual work" figure (92 x 231 PNG from broadland.py)
+const ICON_B64 = "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";
 
 // ---- Layout (inches, from the Broadland spec), drawn at 96 px per inch ----
 const PPI = 96, W = 13.333 * PPI, H = 7.5 * PPI;
@@ -105,10 +113,17 @@ function wrap(s, sizePx, maxW) {
   }
   return lines;
 }
-function textBlock(s, x, yMid, sizePt, maxW, fill = "#222") {
+// single = true: one <text> element per block, lines as <tspan x dy> (to test one PowerPoint text box)
+function textBlock(s, x, yMid, sizePt, maxW, fill = "#222", single = false, extra = "") {
   const size = pt(sizePt), lh = size * 1.2;
   const lines = wrap(s, size, maxW);
   let y = yMid - (lines.length * lh) / 2 + size * 0.85;
+  if (single) {
+    const body = lines.map((line, n) =>
+      `<tspan x="${x}" ${n ? `dy="${lh.toFixed(1)}"` : ""}>` +
+      line.map(tk => `<tspan font-weight="${tk.b ? "bold" : "normal"}">${esc(tk.t)}</tspan>`).join("") + "</tspan>").join("");
+    return `<text x="${x}" y="${y.toFixed(1)}" font-family="${FONT}" font-size="${size.toFixed(1)}" fill="${fill}" xml:space="preserve" ${extra}>${body}</text>`;
+  }
   return lines.map(line => {
     const spans = line.map(tk => `<tspan font-weight="${tk.b ? "bold" : "normal"}">${esc(tk.t)}</tspan>`).join("");
     const el = `<text x="${x}" y="${y.toFixed(1)}" font-family="${FONT}" font-size="${size.toFixed(1)}" fill="${fill}" xml:space="preserve">${spans}</text>`;
@@ -120,7 +135,7 @@ function frame(title) {
   <rect x="${px(0.547)}" y="${px(0.25)}" width="${px(0.544)}" height="${px(0.067)}" fill="${GREEN}"/>
   <rect x="${px(1.088)}" y="${px(0.25)}" width="${px(0.544)}" height="${px(0.067)}" fill="${LIME}"/>
   <text x="${px(0.45)}" y="${px(0.45) + pt(36)}" font-family="${FONT}" font-size="${pt(36)}" font-weight="bold" fill="#222">${esc(title)}</text>
-  <rect x="${px(9.99)}" y="${px(0.40)}" width="${px(0.33)}" height="${px(0.82)}" rx="6" fill="#F28C28"/>
+  <image x="${px(9.99)}" y="${px(0.40)}" width="${px(0.33)}" height="${px(0.82)}" preserveAspectRatio="none" href="data:image/png;base64,${ICON_B64}"/>
   <text x="${px(10.45)}" y="${px(0.81) + pt(8)}" font-family="${FONT}" font-size="${pt(22)}" font-weight="bold" fill="#222">Individual work</text>
   <rect x="0" y="${px(6.829)}" width="${W}" height="${px(0.525)}" fill="${GREEN}"/>
   <rect x="0" y="${px(7.307)}" width="${W}" height="${px(0.262)}" fill="${LIME}"/>`;
@@ -137,35 +152,50 @@ function plus1(cx, mid) {
   return `<circle cx="${cx}" cy="${mid}" r="${px(0.24)}" fill="${GREEN}"/>
     <text x="${cx}" y="${mid + pt(5.5)}" text-anchor="middle" font-family="${FONT}" font-size="${pt(15)}" font-weight="bold" fill="#fff">+1</text>`;
 }
-function quizSVG() {
+function quizSVG(single = false) {
   let body = "";
   QUESTIONS.forEach((q, i) => {
     const r = rowBase(i); body += r.svg;
     const codeX = 8.1, textRight = q.code ? codeX - (q.plus1 ? 0.75 : 0.2) : (q.plus1 ? 12.1 : 12.7);
-    body += textBlock(q.q, px(1.25), r.mid, 20, px(textRight - 1.25));
+    body += textBlock(q.q, px(1.25), r.mid, 20, px(textRight - 1.25), "#222", single);
     if (q.plus1) body += plus1(px(textRight + 0.37), r.mid);
     if (q.code) {
       const bx = px(codeX), by = px(r.y + 0.08), bh = px(CARD_H - 0.16), size = pt(16);
       body += `<rect x="${bx}" y="${by}" width="${px(4.65)}" height="${bh}" fill="#fff" stroke="#333" stroke-width="1.5"/>`;
-      const lh = size * 1.25; let y = r.mid - (q.code.length * lh) / 2 + size * 0.85;
-      q.code.forEach((line, n) => {
-        body += `<text x="${bx + 8}" y="${y.toFixed(1)}" font-family="${MONO}" font-size="${size}" font-weight="bold" fill="${GREEN}">${n + 1}</text>`;
-        body += `<text x="${bx + 34}" y="${y.toFixed(1)}" font-family="${MONO}" font-size="${size}" fill="#222" xml:space="preserve">${esc(line)}</text>`;
-        y += lh;
-      });
+      const lh = size * 1.25, y0 = r.mid - (q.code.length * lh) / 2 + size * 0.85;
+      if (single) {  // line numbers in one box, code in another
+        const col = (xx, attrs, lines) => `<text x="${xx}" y="${y0.toFixed(1)}" font-family="${MONO}" font-size="${size}" ${attrs} xml:space="preserve">` +
+          lines.map((t, n) => `<tspan x="${xx}" ${n ? `dy="${lh.toFixed(1)}"` : ""}>${esc(t)}</tspan>`).join("") + "</text>";
+        body += col(bx + 8, `font-weight="bold" fill="${GREEN}"`, q.code.map((_, n) => String(n + 1)));
+        body += col(bx + 34, `fill="#222"`, q.code);
+      } else {
+        let y = y0;
+        q.code.forEach((line, n) => {
+          body += `<text x="${bx + 8}" y="${y.toFixed(1)}" font-family="${MONO}" font-size="${size}" font-weight="bold" fill="${GREEN}">${n + 1}</text>`;
+          body += `<text x="${bx + 34}" y="${y.toFixed(1)}" font-family="${MONO}" font-size="${size}" fill="#222" xml:space="preserve">${esc(line)}</text>`;
+          y += lh;
+        });
+      }
     }
   });
   return svgWrap(frame("Do Now") +
     `<text x="${px(0.45)}" y="${px(1.55)}" font-family="${FONT}" font-size="${pt(16)}" fill="#222"><tspan font-weight="bold" text-decoration="underline">Date: __ / __ / __</tspan> (write and underline it) · Silent · Stuck? Leave a gap</text>` + body);
 }
-function answersSVG() {
+function answersSVG(single = false, cover = false) {
   let body = "";
   QUESTIONS.forEach((q, i) => {
     const r = rowBase(i); body += r.svg;
-    body += textBlock(q.short, px(1.25), r.mid, 20, px(5.1));
-    body += `<rect x="${px(6.6)}" y="${px(r.y + 0.08)}" width="${px(6.15)}" height="${px(CARD_H - 0.16)}" rx="6" fill="#fff" stroke="${GREEN}" stroke-width="2"/>`;
-    body += textBlock(q.ans, px(6.8), r.mid, 18, px(5.8));
+    body += textBlock(q.short, px(1.25), r.mid, 20, px(4.45), "#222", single);
+    body += `<rect x="${px(5.95)}" y="${px(r.y + 0.08)}" width="${px(6.78)}" height="${px(CARD_H - 0.16)}" rx="6" fill="#fff" stroke="${GREEN}" stroke-width="2"/>`;
+    body += textBlock(q.ans, px(6.11), r.mid, 18, px(6.45), "#222", single);
   });
+  if (cover) {  // drawn last so it sits on top; grouped so rectangle and words should move together
+    const top = ROW0, h = 5 * PITCH - 0.1, x = 5.85, w = 12.88 - 5.85;
+    body += `<g id="Answer cover (drag to reveal)">
+      <rect x="${px(x)}" y="${px(top)}" width="${px(w)}" height="${px(h)}" rx="8" fill="${DARK}"/>
+      <text x="${px(x + w / 2)}" y="${px(top + h / 2) + pt(8)}" text-anchor="middle" font-family="${FONT}" font-size="${pt(24)}" font-weight="bold" fill="#fff">Answers hidden. Drag this box away.</text>
+    </g>`;
+  }
   return svgWrap(frame("Do Now: answers") + body);
 }
 function svgWrap(inner) {
@@ -209,6 +239,8 @@ const ACTIONS = {
   "quiz-png":  () => ({ "image/png": svgToPng(quizSVG()) }),
   "ans-png":   () => ({ "image/png": svgToPng(answersSVG()) }),
   "quiz-svg":  () => ({ "image/svg+xml": new Blob([quizSVG()], { type: "image/svg+xml" }) }),
+  "quiz-svg1": () => ({ "image/svg+xml": new Blob([quizSVG(true)], { type: "image/svg+xml" }) }),
+  "ans-svgc":  () => ({ "image/svg+xml": new Blob([answersSVG(true, true)], { type: "image/svg+xml" }) }),
   "quiz-table":() => ({ "text/html": new Blob([quizTable()], { type: "text/html" }),
                         "text/plain": new Blob([plain(QUESTIONS)], { type: "text/plain" }) }),
   "ans-table": () => ({ "text/html": new Blob([answersTable()], { type: "text/html" }),
